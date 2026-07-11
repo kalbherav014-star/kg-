@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOVA v2.0 - AI Assistant</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --nova-primary: #00d4ff;
+            --nova-dark: #0a0a0f;
+            --nova-panel: rgba(10, 20, 40, 0.92);
+            --nova-danger: #ff3232;
+            --nova-success: #00ff88;
+            --nova-warning: #ffaa00;
+        }
+        body {
+            background: var(--nova-dark);
+            font-family: 'Courier New', monospace;
+            color: var(--nova-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+        }
+        .lock-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--nova-dark);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s, transform 0.8s;
+        }
+        .lock-screen.hidden {
+            opacity: 0;
+            transform: scale(1.1);
+            pointer-events: none;
+        }
+        .nova-core-lg {
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle, var(--nova-primary) 0%, transparent 70%);
+            border-radius: 50%;
+            box-shadow: 0 0 60px rgba(0,212,255,0.6), 0 0 120px rgba(0,212,255,0.3);
+            animation: pulse 2s ease-in-out infinite;
+            margin-bottom: 30px;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.3); opacity: 1; }
+        }
+        .lock-screen h1 {
+            font-size: 28px;
+            letter-spacing: 12px;
+            margin-bottom: 10px;
+        }
+        .lock-subtitle {
+            font-size: 12px;
+            opacity: 0.5;
+            margin-bottom: 40px;
+        }
+        .lock-input {
+            background: rgba(0,212,255,0.1);
+            border: 1px solid rgba(0,212,255,0.3);
+            color: var(--nova-primary);
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            width: 250px;
+            text-align: center;
+            outline: none;
+            letter-spacing: 8px;
+        }
+        .lock-input::placeholder {
+            color: rgba(0,212,255,0.3);
+            letter-spacing: 2px;
+        }
+        .lock-input:focus {
+            border-color: var(--nova-primary);
+            box-shadow: 0 0 20px rgba(0,212,255,0.3);
+        }
+        .lock-btn {
+            margin-top: 15px;
+            background: rgba(0,212,255,0.2);
+            border: 1px solid var(--nova-primary);
+            color: var(--nova-primary);
+            padding: 10px 30px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+        .lock-btn:hover {
+            background: rgba(0,212,255,0.4);
+            box-shadow: 0 0 20px rgba(0,212,255,0.3);
+        }
+        .lock-btn:active {
+            transform: scale(0.95);
+        }
+        .lock-error {
+            color: var(--nova-danger);
+            font-size: 11px;
+            margin-top: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            min-height: 16px;
+        }
+        .lock-error.show { opacity: 1; }
+        .lock-hint {
+            position: absolute;
+            bottom: 30px;
+            font-size: 10px;
+            opacity: 0.3;
+        }
+        .nova-container {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+            display: none;
+        }
+        .nova-container.active { display: block; }
+        .nova-bg-grid {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+        .nova-particles {
+            position: absolute;
+            inset: 0;
+        }
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--nova-primary);
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: float 8s infinite ease-in-out;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; }
+            50% { transform: translateY(-100px) translateX(50px); opacity: 0.8; }
+        }
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: rgba(0,212,255,0.15);
+            animation: scan 4s linear infinite;
+            pointer-events: none;
+            z-index: 5;
+        }
+        @keyframes scan {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+        .nova-header {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+        }
+        .nova-header h1 {
+            font-size: 16px;
+            letter-spacing: 10px;
+            text-transform: uppercase;
+            opacity: 0.7;
+            font-weight: normal;
+        }
+        .nova-header .subtitle {
+            font-size: 9px;
+            opacity: 0.4;
+            margin-top: 3px;
+            letter-spacing: 3px;
+        }
+        .nova-left-panel {
+            position: absolute;
+            left: 15px;
+            top: 55px;
+            width: 200px;
+            background: var(--nova-panel);
+            border: 1px solid rgba(0,212,255,0.15);
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 10px;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+        .panel-title {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+            opacity: 0.7;
+            border-bottom: 1px solid rgba(0,212,255,0.15);
+            padding-bottom: 5px;
+            display: flex;
+            align-items: center;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: var(--nova-success);
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: statusPulse 2s infinite;
+        }
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 5px var(--nova-success); }
+            50% { opacity: 0.5; box-shadow: 0 0 2px var(--nova-success); }
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 6px 0;
+            font-size: 9px;
+        }
+        .stat-bar {
+            width: 100%;
+            height: 3px;
+            background: rgba(0,212,255,0.1);
+            border-radius: 2px;
+            margin-top: 3px;
+            overflow: hidden;
+        }
+        .stat-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--nova-primary), #0088ff);
+            border-radius: 2px;
+            transition: width 1s ease;
+            box-shadow: 0 0 5px var(--nova-primary);
+        }
+        .env-section {
+            margin-top: 10px;
+            border-top: 1px solid rgba(0,212,255,0.1);
+            padding-top: 8px;
+        }
+        .nova-right-panel {
+            position: absolute;
+            right: 15px;
+            top: 55px;
+            width: 200px;
+            background: var(--nova-panel);
+            border: 1px solid rgba(0,212,255,0.15);
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 10px;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+        .visual-input {
+            width: 100%;
+            height: 100px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(0,212,255,0.15);
+            border-radius: 6px;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .visual-input video, .visual-input canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+        .visual-input.active video, .visual-input.active canvas {
+            display: block;
+        }
+        .visual-placeholder {
+            font-size: 9px;
+            opacity: 0.5;
+            text-align: center;
+        }
+        .camera-btn {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background: rgba(0,212,255,0.2);
+            border: 1px solid var(--nova-primary);
+            color: var(--nova-primary);
+            font-size: 8px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+        .nova-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            z-index: 1;
+        }
+        .orbit-ring {
+            position: absolute;
+            border: 1px solid rgba(0,212,255,0.1);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .orbit-ring::before {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--nova-primary);
+            border-radius: 50%;
+            top: -2px;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 0 8px var(--nova-primary);
+        }
+        .orbit-ring:nth-child(1) { width: 70px; height: 70px; animation: orbit 4s linear infinite; }
+        .orbit-ring:nth-child(2) { width: 110px; height: 110px; animation: orbit 6s linear infinite reverse; }
+        .orbit-ring:nth-child(3) { width: 150px; height: 150px; animation: orbit 8s linear infinite; }
+        .orbit-ring:nth-child(4) { width: 190px; height: 190px; animation: orbit 10s linear infinite reverse; }
+        .orbit-ring:nth-child(5) { width: 230px; height: 230px; animation: orbit 12s linear infinite; }
+        .orbit-ring:nth-child(6) { width: 270px; height: 270px; animation: orbit 14s linear infinite reverse; }
+        @keyframes orbit {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        .nova-core {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, var(--nova-primary) 0%, transparent 70%);
+            border-radius: 50%;
+            box-shadow: 0 0 30px rgba(0,212,255,0.6), 0 0 60px rgba(0,212,255,0.3), 0 0 100px rgba(0,212,255,0.1);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .hacker-mode {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 140px;
+            filter: grayscale(100%) contrast(200%);
+            animation: glitch 0.3s infinite;
+            z-index: 100;
+            text-shadow: 0 0 40px rgba(255,0,0,0.6);
+        }
+        .hacker-mode.active { display: block; }
+        @keyframes glitch {
+            0% { transform: translate(-50%, -50%) translate(0); filter: grayscale(100%) contrast(200%); }
+            20% { transform: translate(-50%, -50%) translate(-3px, 3px); filter: grayscale(100%) contrast(200%) hue-rotate(90deg); }
+            40% { transform: translate(-50%, -50%) translate(3px, -3px); filter: grayscale(100%) contrast(200%) hue-rotate(180deg); }
+            60% { transform: translate(-50%, -50%) translate(-3px, -3px); filter: grayscale(100%) contrast(200%) hue-rotate(270deg); }
+            80% { transform: translate(-50%, -50%) translate(3px, 3px); filter: grayscale(100%) contrast(200%); }
+            100% { transform: translate(-50%, -50%) translate(0); filter: grayscale(100%) contrast(200%); }
+        }
+        .nova-response {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            font-size: 11px;
+            max-width: 500px;
+            min-height: 20px;
+            opacity: 0;
+            transition: opacity 0.5s;
+            z-index: 10;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(0,212,255,0.15);
+        }
+        .nova-response.show { opacity: 1; }
+        .typing-cursor::after {
+            content: '|';
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .nova-command-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            background: var(--nova-panel);
+            border: 1px solid rgba(0,212,255,0.15);
+            border-radius: 25px;
+            padding: 8px 18px;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+        .nova-input {
+            background: transparent;
+            border: none;
+            color: var(--nova-primary);
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            width: 280px;
+            outline: none;
+        }
+        .nova-input::placeholder {
+            color: rgba(0,212,255,0.3);
+        }
+        .nova-btn {
+            background: rgba(0,212,255,0.12);
+            border: 1px solid rgba(0,212,255,0.25);
+            color: var(--nova-primary);
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 9px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Courier New', monospace;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .nova-btn:hover {
+            background: rgba(0,212,255,0.3);
+            box-shadow: 0 0 12px rgba(0,212,255,0.2);
+        }
+        .mic-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            padding: 0;
+        }
+        .mic-btn.listening {
+            background: rgba(255, 50, 50, 0.3);
+            border-color: var(--nova-danger);
+            color: var(--nova-danger);
+            animation: micPulse 1s infinite;
+        }
+        @keyframes micPulse {
+            0%, 100% { box-shadow: 0 0 5px rgba(255,50,50,0.3); }
+            50% { box-shadow: 0 0 20px rgba(255,50,50,0.6); }
+        }
+        .code-panel {
+            display: none;
+            position: absolute;
+            left: 230px;
+            top: 55px;
+            width: 380px;
+            max-height: calc(100vh - 140px);
+            background: var(--nova-panel);
+            border: 1px solid rgba(0,212,255,0.15);
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 10px;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+            overflow-y: auto;
+        }
+        .code-panel.active { display: block; }
+        .code-panel .panel-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .code-panel pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', monospace;
+            color: #00ff88;
+            font-size: 9px;
+            line-height: 1.5;
+            margin-top: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .close-btn {
+            background: rgba(255,50,50,0.2);
+            border: 1px solid var(--nova-danger);
+            color: var(--nova-danger);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 9px;
+            cursor: pointer;
+        }
+        .download-btn {
+            background: rgba(0,255,136,0.15);
+            border: 1px solid var(--nova-success);
+            color: var(--nova-success);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 9px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+        }
+        .preview-panel {
+            display: none;
+            position: absolute;
+            right: 230px;
+            top: 55px;
+            width: 350px;
+            height: 400px;
+            background: var(--nova-panel);
+            border: 1px solid rgba(0,212,255,0.15);
+            border-radius: 10px;
+            padding: 12px;
+            z-index: 10;
+        }
+        .preview-panel.active { display: block; }
+        .preview-panel iframe {
+            width: 100%;
+            height: calc(100% - 30px);
+            border: 1px solid rgba(0,212,255,0.1);
+            border-radius: 6px;
+            background: #fff;
+        }
+        .theme-switcher {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            gap: 6px;
+            z-index: 20;
+        }
+        .theme-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        .theme-dot:hover { transform: scale(1.2); }
+        .theme-dot.active { border-color: #fff; box-shadow: 0 0 10px currentColor; }
+        .theme-cyan { background: #00d4ff; }
+        .theme-red { background: #ff3232; }
+        .theme-green { background: #00ff88; }
+        .theme-purple { background: #aa00ff; }
+        .theme-gold { background: #ffaa00; }
+        .game-panel {
+            display: none;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--nova-panel);
+            border: 1px solid rgba(0,212,255,0.2);
+            border-radius: 12px;
+            padding: 20px;
+            z-index: 50;
+            text-align: center;
+        }
+        .game-panel.active { display: block; }
+        .game-panel .close-game {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: var(--nova-danger);
+            border: none;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .ttt-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 70px);
+            gap: 5px;
+            margin: 15px auto;
+        }
+        .ttt-cell {
+            width: 70px;
+            height: 70px;
+            background: rgba(0,212,255,0.1);
+            border: 1px solid rgba(0,212,255,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .ttt-cell:hover { background: rgba(0,212,255,0.2); }
+        .ttt-cell.x { color: var(--nova-primary); }
+        .ttt-cell.o { color: var(--nova-success); }
+        .chat-panel {
+            display: none;
+            position: absolute;
+            right: 15px;
+            bottom: 80px;
+            width: 300px;
+            height: 350px;
+            background: var(--nova-panel);
+            border: 1px solid rgba(0,212,255,0.15);
+            border-radius: 10px;
+            z-index: 20;
+            flex-direction: column;
+        }
+        .chat-panel.active { display: flex; }
+        .chat-header {
+            padding: 10px;
+            border-bottom: 1px solid rgba(0,212,255,0.1);
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            font-size: 10px;
+        }
+        .chat-msg {
+            margin: 6px 0;
+            padding: 6px 10px;
+            border-radius: 8px;
+            max-width: 85%;
+        }
+        .chat-msg.user {
+            background: rgba(0,212,255,0.15);
+            margin-left: auto;
+            text-align: right;
+        }
+        .chat-msg.nova {
+            background: rgba(0,255,136,0.1);
+            margin-right: auto;
+        }
+        .chat-input-area {
+            display: flex;
+            padding: 8px;
+            border-top: 1px solid rgba(0,212,255,0.1);
+            gap: 6px;
+        }
+        .chat-input {
+            flex: 1;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(0,212,255,0.2);
+            color: var(--nova-primary);
+            padding: 6px 10px;
+            border-radius: 15px;
+            font-size: 10px;
+            outline: none;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: var(--nova-panel);
+            border: 1px solid var(--nova-primary);
+            padding: 10px 25px;
+            border-radius: 8px;
+            font-size: 11px;
+            z-index: 200;
+            transition: transform 0.5s;
+        }
+        .notification.show {
+            transform: translateX(-50%) translateY(0);
+        }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(0,212,255,0.05); }
+        ::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.2); border-radius: 3px; }
+        @media (max-width: 900px) {
+            .nova-left-panel, .nova-right-panel { width: 150px; font-size: 9px; }
+            .code-panel, .preview-panel { width: 280px; left: 170px; }
+            .nova-input { width: 180px; }
+            .nova-center { width: 200px; height: 200px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="lock-screen" id="lockScreen">
+        <div class="nova-core-lg"></div>
+        <h1>NOVA</h1>
+        <div class="lock-subtitle">SECURE ACCESS REQUIRED</div>
+        <input type="password" class="lock-input" id="lockInput" placeholder="Enter PIN" maxlength="6" autocomplete="off">
+        <button class="lock-btn" id="lockBtn" onclick="unlock()">AUTHENTICATE</button>
+        <div class="lock-error" id="lockError">Invalid PIN. Try again.</div>
+        <div class="lock-hint">Default PIN: 0000</div>
+    </div>
+
+    <div class="nova-container" id="novaContainer">
+        <div class="nova-bg-grid"></div>
+        <div class="nova-particles" id="particles"></div>
+        <div class="scan-line"></div>
+
+        <div class="theme-switcher">
+            <div class="theme-dot theme-cyan active" onclick="setTheme('cyan')" title="Cyan"></div>
+            <div class="theme-dot theme-red" onclick="setTheme('red')" title="Red"></div>
+            <div class="theme-dot theme-green" onclick="setTheme('green')" title="Green"></div>
+            <div class="theme-dot theme-purple" onclick="setTheme('purple')" title="Purple"></div>
+            <div class="theme-dot theme-gold" onclick="setTheme('gold')" title="Gold"></div>
+        </div>
+
+        <div class="nova-header">
+            <h1>NOVA v2.0</h1>
+            <div class="subtitle">Advanced AI Assistant Interface</div>
+        </div>
+
+        <div class="nova-left-panel">
+            <div class="panel-title"><span class="status-dot"></span>System Status</div>
+            <div class="stat-row"><span>CPU</span><span id="cpuVal">12%</span></div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="cpuBar" style="width:12%"></div></div>
+            <div class="stat-row"><span>RAM</span><span id="ramVal">4.2/16 GB</span></div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="ramBar" style="width:26%"></div></div>
+            <div class="stat-row"><span>GPU</span><span id="gpuVal">8%</span></div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="gpuBar" style="width:8%"></div></div>
+            <div class="stat-row"><span>Temp</span><span id="tempVal">42C</span></div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="tempBar" style="width:42%"></div></div>
+            <div class="env-section">
+                <div class="panel-title">Environment</div>
+                <div class="stat-row"><span>Location</span><span>Mumbai, IN</span></div>
+                <div class="stat-row"><span>Weather</span><span>24C</span></div>
+                <div class="stat-row"><span>Power</span><span>AC</span></div>
+                <div class="stat-row"><span>Battery</span><span id="battery">85%</span></div>
+            </div>
+        </div>
+
+        <div class="code-panel" id="codePanel">
+            <div class="panel-title">
+                <span>Generated Output</span>
+                <button class="close-btn" onclick="closeCodePanel()">X</button>
+            </div>
+            <pre id="codeContent"></pre>
+            <button class="download-btn" onclick="downloadCode()">Download as File</button>
+        </div>
+
+        <div class="preview-panel" id="previewPanel">
+            <div class="panel-title">
+                <span>Live Preview</span>
+                <button class="close-btn" onclick="closePreview()">X</button>
+            </div>
+            <iframe id="previewFrame"></iframe>
+        </div>
+
+        <div class="nova-right-panel">
+            <div class="panel-title">Temporal Sync</div>
+            <div class="stat-row"><span>Time</span><span id="clock">21:37:05</span></div>
+            <div class="stat-row"><span>Date</span><span id="date">Tue, 18 Jul 2026</span></div>
+            <div class="env-section">
+                <div class="panel-title">Network</div>
+                <div class="stat-row"><span>IP</span><span>192.168.1.5</span></div>
+                <div class="stat-row"><span>Status</span><span style="color:var(--nova-success)">ONLINE</span></div>
+                <div class="stat-row"><span>Latency</span><span id="latency">12ms</span></div>
+                <div class="stat-row"><span>Speed</span><span>52.3 MB/s</span></div>
+            </div>
+            <div class="env-section">
+                <div class="panel-title">Visual Input</div>
+                <div class="visual-input" id="visualInput">
+                    <div class="visual-placeholder">Camera Offline<br>Click ON</div>
+                    <video id="cameraFeed" autoplay muted></video>
+                    <button class="camera-btn" onclick="toggleCamera()">ON</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="nova-center" id="novaCenter">
+            <div class="orbit-ring"></div>
+            <div class="orbit-ring"></div>
+            <div class="orbit-ring"></div>
+            <div class="orbit-ring"></div>
+            <div class="orbit-ring"></div>
+            <div class="orbit-ring"></div>
+            <div class="nova-core"></div>
+        </div>
+
+        <div class="hacker-mode" id="hackerMode">SKULL</div>
+
+        <div class="chat-panel" id="chatPanel">
+            <div class="chat-header">
+                <span>NOVA CHAT</span>
+                <button class="close-btn" onclick="toggleChat()">X</button>
+            </div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input-area">
+                <input type="text" class="chat-input" id="chatInput" placeholder="Ask anything..." onkeypress="if(event.key==='Enter')sendChat()">
+                <button class="nova-btn" onclick="sendChat()">Send</button>
+            </div>
+        </div>
+
+        <div class="game-panel" id="gamePanel">
+            <button class="close-game" onclick="closeGame()">X CLOSE</button>
+            <div id="gameContent"></div>
+        </div>
+
+        <div class="nova-response" id="novaResponse">
+            <span class="typing-cursor" id="responseText"></span>
+        </div>
+
+        <div class="nova-command-bar">
+            <button class="nova-btn mic-btn" id="micBtn" onclick="toggleVoice()">MIC</button>
+            <input type="text" class="nova-input" id="commandInput" placeholder="Type command or say Hello Nova..." onkeypress="handleKeyPress(event)">
+            <button class="nova-btn" onclick="executeCommand()">Execute</button>
+            <button class="nova-btn" onclick="toggleChat()">Chat</button>
+            <button class="nova-btn" onclick="toggleHackerMode()">Hack</button>
+        </div>
+    </div>
+
+    <div class="notification" id="notification"></div>
+
+    <script>
+
+        // ===== AUDIO SYSTEM =====
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+        var audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new AudioContext();
+        }
+
+        function playBeep(freq, duration, type) {
+            try {
+                initAudio();
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = freq || 800;
+                osc.type = type || 'sine';
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + (duration || 0.1));
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + (duration || 0.1));
+            } catch(e) {}
+        }
+
+        function playSuccess() {
+            playBeep(1200, 0.1);
+            setTimeout(function() { playBeep(1600, 0.15); }, 100);
+        }
+
+        function playError() {
+            playBeep(300, 0.2, 'sawtooth');
+        }
+
+        // ===== LOCK SCREEN - FIXED =====
+        function unlock() {
+            var pin = document.getElementById('lockInput').value;
+            if (pin === '0000') {
+                playSuccess();
+                document.getElementById('lockScreen').classList.add('hidden');
+                document.getElementById('novaContainer').classList.add('active');
+                showNotification('Authentication Successful. Welcome to NOVA v2.0');
+                setTimeout(function() {
+                    showResponse('NOVA v2.0 Online. Say Hello Nova or type a command. Try: Create website, Play game, Open chat, or Help.');
+                }, 1000);
+            } else {
+                playError();
+                var err = document.getElementById('lockError');
+                err.classList.add('show');
+                document.getElementById('lockInput').value = '';
+                document.getElementById('lockInput').focus();
+                setTimeout(function() { err.classList.remove('show'); }, 2000);
+            }
+        }
+
+        // FIXED: Proper event listener for Enter key
+        document.addEventListener('DOMContentLoaded', function() {
+            var lockInput = document.getElementById('lockInput');
+            if (lockInput) {
+                lockInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        unlock();
+                    }
+                });
+                lockInput.focus();
+            }
+        });
+
+        // ===== PARTICLES =====
+        var particlesContainer = document.getElementById('particles');
+        for (var i = 0; i < 40; i++) {
+            var p = document.createElement('div');
+            p.className = 'particle';
+            p.style.left = Math.random() * 100 + '%';
+            p.style.top = Math.random() * 100 + '%';
+            p.style.animationDelay = Math.random() * 8 + 's';
+            p.style.animationDuration = (5 + Math.random() * 5) + 's';
+            particlesContainer.appendChild(p);
+        }
+
+        // ===== CLOCK =====
+        function updateClock() {
+            var now = new Date();
+            document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', {hour12: false});
+            document.getElementById('date').textContent = now.toLocaleDateString('en-US', {weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'});
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // ===== SYSTEM STATS =====
+        function updateStats() {
+            var cpu = Math.floor(10 + Math.random() * 30);
+            var ram = (3.5 + Math.random() * 3).toFixed(1);
+            var gpu = Math.floor(5 + Math.random() * 20);
+            var temp = Math.floor(38 + Math.random() * 15);
+            var lat = Math.floor(8 + Math.random() * 20);
+            var bat = Math.floor(70 + Math.random() * 25);
+
+            document.getElementById('cpuVal').textContent = cpu + '%';
+            document.getElementById('cpuBar').style.width = cpu + '%';
+            document.getElementById('ramVal').textContent = ram + '/16 GB';
+            document.getElementById('ramBar').style.width = (ram/16*100) + '%';
+            document.getElementById('gpuVal').textContent = gpu + '%';
+            document.getElementById('gpuBar').style.width = gpu + '%';
+            document.getElementById('tempVal').textContent = temp + 'C';
+            document.getElementById('tempBar').style.width = (temp/80*100) + '%';
+            document.getElementById('latency').textContent = lat + 'ms';
+            document.getElementById('battery').textContent = bat + '%';
+        }
+        setInterval(updateStats, 2000);
+
+        // ===== THEME SYSTEM =====
+        var themes = {
+            cyan: { primary: '#00d4ff', glow: 'rgba(0,212,255,0.5)' },
+            red: { primary: '#ff3232', glow: 'rgba(255,50,50,0.5)' },
+            green: { primary: '#00ff88', glow: 'rgba(0,255,136,0.5)' },
+            purple: { primary: '#aa00ff', glow: 'rgba(170,0,255,0.5)' },
+            gold: { primary: '#ffaa00', glow: 'rgba(255,170,0,0.5)' }
+        };
+
+        function setTheme(themeName) {
+            var t = themes[themeName];
+            document.documentElement.style.setProperty('--nova-primary', t.primary);
+            document.documentElement.style.setProperty('--nova-glow', '0 0 20px ' + t.glow);
+            document.querySelectorAll('.theme-dot').forEach(function(d) { d.classList.remove('active'); });
+            document.querySelector('.theme-' + themeName).classList.add('active');
+            playBeep(600, 0.05);
+            showNotification('Theme changed to ' + themeName.toUpperCase());
+        }
+
+        // ===== CAMERA =====
+        var cameraStream = null;
+        async function toggleCamera() {
+            var visualInput = document.getElementById('visualInput');
+            var video = document.getElementById('cameraFeed');
+            var btn = visualInput.querySelector('.camera-btn');
+
+            if (!cameraStream) {
+                try {
+                    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = cameraStream;
+                    visualInput.classList.add('active');
+                    btn.textContent = 'OFF';
+                    playSuccess();
+                    showResponse('Visual input stream established.');
+                } catch (e) {
+                    playError();
+                    showResponse('Camera access denied.');
+                }
+            } else {
+                cameraStream.getTracks().forEach(function(t) { t.stop(); });
+                cameraStream = null;
+                visualInput.classList.remove('active');
+                btn.textContent = 'ON';
+                showResponse('Visual input terminated.');
+            }
+        }
+
+        // ===== VOICE RECOGNITION =====
+        var recognition = null;
+        var isListening = false;
+
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = function() {
+                isListening = true;
+                document.getElementById('micBtn').classList.add('listening');
+                showResponse('Listening... Say Hello Nova or give a command.');
+            };
+
+            recognition.onend = function() {
+                isListening = false;
+                document.getElementById('micBtn').classList.remove('listening');
+            };
+
+            recognition.onresult = function(e) {
+                var command = e.results[0][0].transcript;
+                document.getElementById('commandInput').value = command;
+                playSuccess();
+                processCommand(command);
+            };
+
+            recognition.onerror = function() {
+                playError();
+                showResponse('Voice recognition error. Try typing.');
+                isListening = false;
+                document.getElementById('micBtn').classList.remove('listening');
+            };
+        }
+
+        function toggleVoice() {
+            if (!recognition) {
+                playError();
+                showResponse('Voice not supported. Use Chrome/Edge.');
+                return;
+            }
+            if (isListening) {
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        }
+
+        // ===== CHAT SYSTEM =====
+        var chatOpen = false;
+        function toggleChat() {
+            chatOpen = !chatOpen;
+            document.getElementById('chatPanel').classList.toggle('active', chatOpen);
+            playBeep(500, 0.05);
+        }
+
+        function sendChat() {
+            var input = document.getElementById('chatInput');
+            var msg = input.value.trim();
+            if (!msg) return;
+
+            addChatMessage(msg, 'user');
+            input.value = '';
+
+            setTimeout(function() {
+                var responses = [
+                    'I understand. Let me process that for you.',
+                    'Interesting question! Here is what I think...',
+                    'I can help with that. Analyzing data now.',
+                    'That is a great point! Let me elaborate.',
+                    'Processing your request. Stand by.',
+                    'I have analyzed your input. Here is my response.',
+                    'Nova AI is thinking... Here is the answer.',
+                    'That is fascinating! Let me provide insights.'
+                ];
+                var randomResponse = responses[Math.floor(Math.random() * responses.length)];
+                addChatMessage(randomResponse, 'nova');
+                playBeep(700, 0.08);
+            }, 800 + Math.random() * 1000);
+        }
+
+        function addChatMessage(text, sender) {
+            var container = document.getElementById('chatMessages');
+            var div = document.createElement('div');
+            div.className = 'chat-msg ' + sender;
+            div.textContent = text;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ===== CODE TEMPLATES =====
+        var codeTemplates = {
+            website: '<!DOCTYPE html>\n<html><head><title>NOVA Website</title>\n<style>\nbody{font-family:Arial;background:#0a0a0f;color:#fff;margin:0}\n.hero{text-align:center;padding:100px 20px;background:linear-gradient(135deg,#0a0a0f,#1a1a3e)}\nh1{color:#00d4ff;font-size:48px;margin-bottom:20px}\np{color:#888;font-size:18px}\n.btn{background:#00d4ff;color:#000;padding:15px 40px;border:none;border-radius:30px;font-size:16px;cursor:pointer;margin-top:30px}\n.features{display:flex;justify-content:center;gap:40px;padding:60px 20px;flex-wrap:wrap}\n.card{background:rgba(0,212,255,0.1);padding:30px;border-radius:15px;border:1px solid rgba(0,212,255,0.2);width:250px}\n</style></head>\n<body>\n<div class="hero">\n<h1>Welcome to Future</h1>\n<p>Powered by NOVA AI Technology</p>\n<button class="btn">Get Started</button>\n</div>\n<div class="features">\n<div class="card"><h3>Fast</h3><p>Lightning speed performance</p></div>\n<div class="card"><h3>Secure</h3><p>Enterprise-grade security</p></div>\n<div class="card"><h3>Smart</h3><p>AI-powered automation</p></div>\n</div>\n</body></html>',
+
+            login: '<!DOCTYPE html>\n<html><head><title>NOVA Login</title>\n<style>\nbody{display:flex;justify-content:center;align-items:center;height:100vh;background:#0a0a0f;margin:0;font-family:Arial}\n.box{background:rgba(0,212,255,0.08);padding:50px;border-radius:20px;border:1px solid rgba(0,212,255,0.3);text-align:center;box-shadow:0 0 40px rgba(0,212,255,0.1)}\nh2{color:#00d4ff;margin-bottom:30px;font-size:28px}\ninput{display:block;width:280px;padding:15px;margin:15px auto;background:#111;border:1px solid rgba(0,212,255,0.3);color:#00d4ff;border-radius:8px;font-size:14px;outline:none}\ninput:focus{border-color:#00d4ff;box-shadow:0 0 15px rgba(0,212,255,0.2)}\nbutton{width:100%;padding:15px;background:#00d4ff;color:#000;border:none;border-radius:8px;font-size:16px;cursor:pointer;font-weight:bold;margin-top:10px}\nbutton:hover{box-shadow:0 0 20px rgba(0,212,255,0.4)}\n.links{color:#666;font-size:12px;margin-top:20px}\n.links a{color:#00d4ff;text-decoration:none}\n</style></head>\n<body>\n<div class="box">\n<h2>NOVA</h2>\n<input type="text" placeholder="Username or Email">\n<input type="password" placeholder="Password">\n<button>Sign In</button>\n<div class="links"><a href="#">Forgot Password?</a> | <a href="#">Create Account</a></div>\n</div>\n</body></html>',
+
+            calculator: '<!DOCTYPE html>\n<html><head><title>NOVA Calculator</title>\n<style>\nbody{display:flex;justify-content:center;align-items:center;height:100vh;background:#0a0a0f;margin:0;font-family:monospace}\n.calc{background:#1a1a2e;padding:25px;border-radius:15px;border:1px solid rgba(0,212,255,0.2);box-shadow:0 0 30px rgba(0,212,255,0.1)}\n.display{background:#0a0a0f;color:#00d4ff;padding:20px;text-align:right;font-size:32px;margin-bottom:15px;border-radius:10px;border:1px solid rgba(0,212,255,0.2);min-height:60px;word-break:break-all}\n.buttons{display:grid;grid-template-columns:repeat(4,70px);gap:10px}\nbutton{padding:18px;font-size:18px;background:#0f3460;color:#fff;border:none;border-radius:10px;cursor:pointer;transition:all 0.2s}\nbutton:hover{background:#00d4ff;color:#000;transform:translateY(-2px)}\nbutton.op{background:#1a5f7a}\nbutton.eq{background:#00d4ff;color:#000;grid-row:span 2}\nbutton.zero{grid-column:span 2}\nbutton.clear{background:#ff3232}\n</style></head>\n<body>\n<div class="calc">\n<div class="display" id="d">0</div>\n<div class="buttons">\n<button class="clear" onclick="c()">C</button><button onclick="a('/')">/</button><button onclick="a('*')">x</button><button onclick="bs()">Del</button>\n<button onclick="a('7')">7</button><button onclick="a('8')">8</button><button onclick="a('9')">9</button><button class="op" onclick="a('-')">-</button>\n<button onclick="a('4')">4</button><button onclick="a('5')">5</button><button onclick="a('6')">6</button><button class="op" onclick="a('+')">+</button>\n<button onclick="a('1')">1</button><button onclick="a('2')">2</button><button onclick="a('3')">3</button><button class="eq" onclick="e()">=</button>\n<button class="zero" onclick="a('0')">0</button><button onclick="a('.')">.</button>\n</div></div>\n<script>\nvar d=document.getElementById('d');\nfunction a(v){if(d.textContent==='0'&&v!=='.')d.textContent=v;else d.textContent+=v;}\nfunction c(){d.textContent='0';}\nfunction bs(){d.textContent=d.textContent.slice(0,-1)||'0';}\nfunction e(){try{d.textContent=eval(d.textContent)||'0';}catch{d.textContent='Error';}}\n<\/script>\n</body></html>',
+
+            python: '# NOVA AI - Python Script Generator\n# Generated by NOVA v2.0\n\nimport random\nimport datetime\nimport json\n\nclass NovaAI:\n    def __init__(self):\n        self.name = "NOVA"\n        self.version = "2.0"\n        self.status = "ONLINE"\n        \n    def greet(self):\n        print("=" * 50)\n        print(f"  {self.name} AI ASSISTANT v{self.version}")\n        print("=" * 50)\n        print(f"System Time: {datetime.datetime.now()}")\n        print(f"Session ID: {random.randint(100000, 999999)}")\n        print(f"Status: {self.status}")\n        print("=" * 50)\n        \n    def process_data(self, data):\n        result = {\n            "input": data,\n            "processed": True,\n            "timestamp": str(datetime.datetime.now()),\n            "confidence": round(random.uniform(0.85, 0.99), 2)\n        }\n        return json.dumps(result, indent=2)\n        \n    def calculate(self, expression):\n        try:\n            return eval(expression)\n        except:\n            return "Invalid expression"\n\nif __name__ == "__main__":\n    nova = NovaAI()\n    nova.greet()\n    print("\n[EXAMPLE] Processing data...")\n    print(nova.process_data("Hello NOVA"))\n    print("\n[EXAMPLE] Calculation: 2 + 2 =", nova.calculate("2 + 2"))',
+
+            portfolio: '<!DOCTYPE html>\n<html><head><title>My Portfolio</title>\n<style>\n*{margin:0;padding:0;box-sizing:border-box}\nbody{font-family:Segoe UI,sans-serif;background:#0a0a0f;color:#fff}\n.nav{display:flex;justify-content:space-between;padding:20px 50px;background:rgba(0,0,0,0.5);position:fixed;width:100%;top:0}\n.nav a{color:#00d4ff;text-decoration:none;margin:0 20px;font-size:14px}\n.hero{height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;flex-direction:column}\n.hero h1{font-size:60px;background:linear-gradient(90deg,#00d4ff,#aa00ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}\n.hero p{color:#888;font-size:20px;margin:20px 0}\n.btn{background:#00d4ff;color:#000;padding:15px 40px;border-radius:30px;text-decoration:none;font-weight:bold}\n.section{padding:80px 50px;text-align:center}\n.skills{display:flex;justify-content:center;gap:30px;flex-wrap:wrap;margin-top:40px}\n.skill{background:rgba(0,212,255,0.1);padding:20px 40px;border-radius:10px;border:1px solid rgba(0,212,255,0.2)}\n</style></head>\n<body>\n<nav class="nav">\n<div style="color:#00d4ff;font-weight:bold">PORTFOLIO</div>\n<div><a href="#home">Home</a><a href="#skills">Skills</a><a href="#contact">Contact</a></div>\n</nav>\n<section class="hero" id="home">\n<h1>John Doe</h1>\n<p>Full Stack Developer | AI Enthusiast</p>\n<a href="#contact" class="btn">Hire Me</a>\n</section>\n<section class="section" id="skills">\n<h2 style="color:#00d4ff;margin-bottom:20px">My Skills</h2>\n<div class="skills">\n<div class="skill">Python</div><div class="skill">React</div>\n<div class="skill">Mobile</div><div class="skill">AI/ML</div>\n</div>\n</section>\n</body></html>'
+        };
+
+        var currentCode = '';
+        var currentFilename = '';
+
+        function showCodePanel(code, filename) {
+            currentCode = code;
+            currentFilename = filename || 'generated.html';
+            document.getElementById('codeContent').textContent = code;
+            document.getElementById('codePanel').classList.add('active');
+        }
+
+        function closeCodePanel() {
+            document.getElementById('codePanel').classList.remove('active');
+        }
+
+        function showPreview(code) {
+            var frame = document.getElementById('previewFrame');
+            frame.srcdoc = code;
+            document.getElementById('previewPanel').classList.add('active');
+        }
+
+        function closePreview() {
+            document.getElementById('previewPanel').classList.remove('active');
+        }
+
+        function downloadCode() {
+            var blob = new Blob([currentCode], { type: 'text/html' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = currentFilename;
+            a.click();
+            URL.revokeObjectURL(url);
+            playSuccess();
+            showNotification('File downloaded: ' + currentFilename);
+        }
+
+        // ===== GAMES =====
+        function closeGame() {
+            document.getElementById('gamePanel').classList.remove('active');
+            document.getElementById('gameContent').innerHTML = '';
+        }
+
+        function startTicTacToe() {
+            var panel = document.getElementById('gamePanel');
+            var content = document.getElementById('gameContent');
+            content.innerHTML = '<h3 style="color:var(--nova-primary);margin-bottom:10px">TIC TAC TOE</h3><div style="font-size:11px;margin-bottom:10px">Player: <span style="color:var(--nova-primary)">X</span> | AI: <span style="color:var(--nova-success)">O</span></div><div class="ttt-grid" id="tttGrid"></div><div id="tttStatus" style="margin-top:10px;font-size:11px">Your turn!</div><button class="nova-btn" style="margin-top:10px" onclick="startTicTacToe()">Restart</button>';
+            panel.classList.add('active');
+
+            var grid = document.getElementById('tttGrid');
+            var board = ['','','','','','','','',''];
+            var currentPlayer = 'X';
+            var gameOver = false;
+
+            function render() {
+                grid.innerHTML = '';
+                board.forEach(function(cell, i) {
+                    var div = document.createElement('div');
+                    div.className = 'ttt-cell ' + (cell === 'X' ? 'x' : cell === 'O' ? 'o' : '');
+                    div.textContent = cell;
+                    div.onclick = function() { makeMove(i); };
+                    grid.appendChild(div);
+                });
+            }
+
+            function makeMove(i) {
+                if (board[i] || gameOver || currentPlayer !== 'X') return;
+                board[i] = 'X';
+                playBeep(800, 0.05);
+                render();
+                if (checkWinner('X')) {
+                    document.getElementById('tttStatus').innerHTML = '<span style="color:var(--nova-primary)">You Win!</span>';
+                    playSuccess();
+                    gameOver = true;
+                    return;
+                }
+                if (board.every(function(c) { return c; })) {
+                    document.getElementById('tttStatus').textContent = 'Draw!';
+                    gameOver = true;
+                    return;
+                }
+                currentPlayer = 'O';
+                document.getElementById('tttStatus').textContent = 'AI thinking...';
+                setTimeout(aiMove, 500);
+            }
+
+            function aiMove() {
+                if (gameOver) return;
+                var bestScore = -Infinity;
+                var move = 0;
+                for (var i = 0; i < 9; i++) {
+                    if (!board[i]) {
+                        board[i] = 'O';
+                        var score = minimax(board, 0, false);
+                        board[i] = '';
+                        if (score > bestScore) { bestScore = score; move = i; }
+                    }
+                }
+                board[move] = 'O';
+                playBeep(600, 0.05);
+                render();
+                if (checkWinner('O')) {
+                    document.getElementById('tttStatus').innerHTML = '<span style="color:var(--nova-danger)">AI Wins!</span>';
+                    playError();
+                    gameOver = true;
+                    return;
+                }
+                if (board.every(function(c) { return c; })) {
+                    document.getElementById('tttStatus').textContent = 'Draw!';
+                    gameOver = true;
+                    return;
+                }
+                currentPlayer = 'X';
+                document.getElementById('tttStatus').textContent = 'Your turn!';
+            }
+
+            function minimax(b, depth, isMax) {
+                if (checkWinner('O')) return 10 - depth;
+                if (checkWinner('X')) return depth - 10;
+                if (b.every(function(c) { return c; })) return 0;
+
+                if (isMax) {
+                    var best = -Infinity;
+                    for (var i = 0; i < 9; i++) {
+                        if (!b[i]) { b[i] = 'O'; best = Math.max(best, minimax(b, depth+1, false)); b[i] = ''; }
+                    }
+                    return best;
+                } else {
+                    var best = Infinity;
+                    for (var i = 0; i < 9; i++) {
+                        if (!b[i]) { b[i] = 'X'; best = Math.min(best, minimax(b, depth+1, true)); b[i] = ''; }
+                    }
+                    return best;
+                }
+            }
+
+            function checkWinner(p) {
+                var wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+                return wins.some(function(w) { return w.every(function(i) { return board[i] === p; }); });
+            }
+
+            render();
+        }
+
+        // ===== SNAKE GAME =====
+        function startSnakeGame() {
+            var panel = document.getElementById('gamePanel');
+            var content = document.getElementById('gameContent');
+            content.innerHTML = '<h3 style="color:var(--nova-primary);margin-bottom:10px">SNAKE GAME</h3><div style="font-size:11px;margin-bottom:10px">Score: <span id="snakeScore" style="color:var(--nova-success)">0</span></div><canvas id="snakeCanvas" width="300" height="300" style="border:2px solid var(--nova-primary);background:#0a0a0f"></canvas><div style="font-size:9px;margin-top:8px;opacity:0.6">Use Arrow Keys to play</div><button class="nova-btn" style="margin-top:10px" onclick="startSnakeGame()">Restart</button>';
+            panel.classList.add('active');
+
+            var canvas = document.getElementById('snakeCanvas');
+            var ctx = canvas.getContext('2d');
+            var grid = 15;
+            var snake = [{x: 10, y: 10}];
+            var food = {x: 15, y: 15};
+            var dx = 1, dy = 0;
+            var score = 0;
+            var gameOver = false;
+
+            function draw() {
+                ctx.fillStyle = '#0a0a0f';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#00d4ff';
+                snake.forEach(function(s) {
+                    ctx.fillRect(s.x*grid, s.y*grid, grid-2, grid-2);
+                });
+                ctx.fillStyle = '#ff3232';
+                ctx.fillRect(food.x*grid, food.y*grid, grid-2, grid-2);
+            }
+
+            function update() {
+                if (gameOver) return;
+                var head = {x: snake[0].x + dx, y: snake[0].y + dy};
+                if (head.x < 0) head.x = 19; if (head.x > 19) head.x = 0;
+                if (head.y < 0) head.y = 19; if (head.y > 19) head.y = 0;
+
+                for (var i = 0; i < snake.length; i++) {
+                    if (snake[i].x === head.x && snake[i].y === head.y) {
+                        gameOver = true;
+                        showResponse('Game Over! Score: ' + score);
+                        return;
+                    }
+                }
+
+                snake.unshift(head);
+                if (head.x === food.x && head.y === food.y) {
+                    score += 10;
+                    document.getElementById('snakeScore').textContent = score;
+                    playBeep(1000, 0.1);
+                    food = {x: Math.floor(Math.random()*20), y: Math.floor(Math.random()*20)};
+                } else {
+                    snake.pop();
+                }
+            }
+
+            document.onkeydown = function(e) {
+                if (e.key === 'ArrowUp' && dy === 0) { dx = 0; dy = -1; }
+                if (e.key === 'ArrowDown' && dy === 0) { dx = 0; dy = 1; }
+                if (e.key === 'ArrowLeft' && dx === 0) { dx = -1; dy = 0; }
+                if (e.key === 'ArrowRight' && dx === 0) { dx = 1; dy = 0; }
+            };
+
+            var interval = setInterval(function() { update(); draw(); }, 120);
+        }
+
+        // ===== COMMAND PROCESSING =====
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') executeCommand();
+        }
+
+        function executeCommand() {
+            var cmd = document.getElementById('commandInput').value.trim();
+            if (!cmd) return;
+            playBeep(500, 0.05);
+            processCommand(cmd);
+            document.getElementById('commandInput').value = '';
+        }
+
+        function processCommand(cmd) {
+            var lower = cmd.toLowerCase();
+
+            if (lower.indexOf('hello nova') !== -1 || lower.indexOf('hi nova') !== -1 || lower.indexOf('hey nova') !== -1) {
+                playSuccess();
+                showResponse('Hello! I am Nova v2.0, your AI assistant. I am online and ready to execute your commands. What would you like me to create?');
+            }
+            else if (lower.indexOf('website') !== -1 || lower.indexOf('web') !== -1) {
+                showResponse('Generating website template...');
+                setTimeout(function() {
+                    showCodePanel(codeTemplates.website, 'nova_website.html');
+                    showPreview(codeTemplates.website);
+                    playSuccess();
+                    showResponse('Website template generated! Check code panel and preview.');
+                }, 1500);
+            }
+            else if (lower.indexOf('login') !== -1) {
+                showResponse('Generating login page...');
+                setTimeout(function() {
+                    showCodePanel(codeTemplates.login, 'nova_login.html');
+                    showPreview(codeTemplates.login);
+                    playSuccess();
+                    showResponse('Login page generated!');
+                }, 1500);
+            }
+            else if (lower.indexOf('calculator') !== -1 || lower.indexOf('calc') !== -1) {
+                showResponse('Building calculator app...');
+                setTimeout(function() {
+                    showCodePanel(codeTemplates.calculator, 'nova_calculator.html');
+                    showPreview(codeTemplates.calculator);
+                    playSuccess();
+                    showResponse('Calculator app generated!');
+                }, 1500);
+            }
+            else if (lower.indexOf('portfolio') !== -1) {
+                showResponse('Creating portfolio website...');
+                setTimeout(function() {
+                    showCodePanel(codeTemplates.portfolio, 'nova_portfolio.html');
+                    showPreview(codeTemplates.portfolio);
+                    playSuccess();
+                    showResponse('Portfolio website generated!');
+                }, 1500);
+            }
+            else if (lower.indexOf('python') !== -1 || lower.indexOf('script') !== -1) {
+                showResponse('Generating Python script...');
+                setTimeout(function() {
+                    showCodePanel(codeTemplates.python, 'nova_script.py');
+                    playSuccess();
+                    showResponse('Python script generated! Download it.');
+                }, 1500);
+            }
+            else if (lower.indexOf('tic') !== -1 || lower.indexOf('tictactoe') !== -1) {
+                playSuccess();
+                showResponse('Starting Tic Tac Toe game...');
+                startTicTacToe();
+            }
+            else if (lower.indexOf('snake') !== -1 || lower.indexOf('game') !== -1) {
+                playSuccess();
+                showResponse('Starting Snake game... Use arrow keys!');
+                startSnakeGame();
+            }
+            else if (lower.indexOf('hacker') !== -1 || lower.indexOf('hack') !== -1 || lower.indexOf('skull') !== -1) {
+                toggleHackerMode();
+            }
+            else if (lower.indexOf('camera') !== -1 || lower.indexOf('visual') !== -1) {
+                toggleCamera();
+            }
+            else if (lower.indexOf('chat') !== -1 || lower.indexOf('talk') !== -1) {
+                toggleChat();
+                showResponse('Chat panel opened. Ask me anything!');
+            }
+            else if (lower.indexOf('status') !== -1 || lower.indexOf('system') !== -1) {
+                showResponse('All systems operational. CPU: Normal, RAM: Optimal, Network: Stable, Visual: Standby.');
+            }
+            else if (lower.indexOf('time') !== -1 || lower.indexOf('clock') !== -1) {
+                showResponse('Current time: ' + new Date().toLocaleTimeString());
+            }
+            else if (lower.indexOf('who are you') !== -1 || lower.indexOf('what are you') !== -1) {
+                showResponse('I am Nova v2.0 — an advanced AI assistant. I can code, play games, chat, monitor systems, process visual input, and execute your commands in real-time.');
+            }
+            else if (lower.indexOf('theme') !== -1 && lower.indexOf('red') !== -1) {
+                setTheme('red');
+            }
+            else if (lower.indexOf('theme') !== -1 && lower.indexOf('green') !== -1) {
+                setTheme('green');
+            }
+            else if (lower.indexOf('theme') !== -1 && lower.indexOf('purple') !== -1) {
+                setTheme('purple');
+            }
+            else if (lower.indexOf('theme') !== -1 && lower.indexOf('gold') !== -1) {
+                setTheme('gold');
+            }
+            else if (lower.indexOf('theme') !== -1 && lower.indexOf('cyan') !== -1) {
+                setTheme('cyan');
+            }
+            else if (lower.indexOf('close') !== -1 && lower.indexOf('panel') !== -1) {
+                closeCodePanel();
+                closePreview();
+                showResponse('Panels closed.');
+            }
+            else if (lower.indexOf('help') !== -1) {
+                showResponse('Commands: Hello Nova, Create website, Create login, Create calculator, Create portfolio, Create python, Play tic tac toe, Play snake, Open chat, Open camera, Hacker mode, Theme red/green/purple/gold/cyan, System status, Who are you, Help');
+            }
+            else {
+                showResponse('Command: "' + cmd + '" received. Try: "Create website", "Play game", "Open chat", or "Help" for all options.');
+            }
+        }
+
+        // ===== TYPEWRITER EFFECT =====
+        var typeTimeout;
+        function showResponse(text) {
+            var resp = document.getElementById('novaResponse');
+            var txt = document.getElementById('responseText');
+            clearTimeout(typeTimeout);
+            resp.classList.remove('show');
+            txt.textContent = '';
+
+            setTimeout(function() {
+                resp.classList.add('show');
+                var i = 0;
+                function type() {
+                    if (i < text.length) {
+                        txt.textContent += text.charAt(i);
+                        i++;
+                        typeTimeout = setTimeout(type, 15);
+                    }
+                }
+                type();
+            }, 100);
+        }
+
+        // ===== HACKER MODE =====
+        var hackerActive = false;
+        function toggleHackerMode() {
+            hackerActive = !hackerActive;
+            var skull = document.getElementById('hackerMode');
+            var center = document.getElementById('novaCenter');
+            var container = document.getElementById('novaContainer');
+
+            if (hackerActive) {
+                skull.classList.add('active');
+                center.style.opacity = '0.1';
+                container.style.filter = 'hue-rotate(180deg) contrast(1.3)';
+                playError();
+                showResponse('WARNING: HACKER MODE ACTIVATED. System override engaged. Root access granted.');
+            } else {
+                skull.classList.remove('active');
+                center.style.opacity = '1';
+                container.style.filter = 'none';
+                showResponse('Hacker mode deactivated. Systems normal.');
+            }
+        }
+
+        // ===== NOTIFICATION =====
+        function showNotification(msg) {
+            var notif = document.getElementById('notification');
+            notif.textContent = msg;
+            notif.classList.add('show');
+            setTimeout(function() {
+                notif.classList.remove('show');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
